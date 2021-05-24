@@ -1,0 +1,94 @@
+pipeline {
+    agent {
+        dockerfile {
+            dir 'jenkins'
+            args '-v /root/.m2:/root/.m2'
+        }
+    }
+
+    options {
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        CHECKSTYLE_FILE = 'jenkins/checkstyle.xml'
+        UNIT_TESTS_PATH = 'com.celfocus.qa.cicd.training.*Test'
+        SONAR_ADDRESS = 'http://host.docker.internal:9000'
+        NEXUS_ADDRESS = 'host.docker.internal:8081'
+        SONAR_PROPERTIES = 'jenkins/project.properties'
+        JENSKINS_SONAR_INSTALATION = 'Sonarqube'
+    }
+
+    stages {
+        stage('Build and test') {
+            steps {
+                sh "java -jar <INSERT_CHECKSTYLE_TOOL> -c ${CHECKSTYLE_FILE} src/main/**"
+
+                sh "mvn clean test -Dtest='${UNIT_TESTS_PATH}'"
+                step([$class: 'JacocoPublisher', execPattern: 'target/jacoco.exec', exclusionPattern: '**/Main.class'])
+
+                withSonarQubeEnv("${JENSKINS_SONAR_INSTALATION}") {
+                    sh "<INSERT_SONARQUBE_SCANNER> -Dsonar.host.url=${SONAR_ADDRESS} -Dproject.settings=${SONAR_PROPERTIES}"
+                }
+                timeout(time: 1, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Continuous Integration - Merge to develop') {
+            when {
+                branch "CICD-*"
+            }
+            steps {
+                sh "git config --global user.email '<INSERT_GITLAB_USER_EMAIL>'"
+                sh "git config --global user.name '<INSERT_GITLAB_USER_NAME>'"
+                sh "git checkout -f origin/develop"
+                sh "git merge --ff ${env.GIT_COMMIT}"
+                script {
+                    String gitRepo = "${env.GIT_URL}".substring(8)
+                    withCredentials([usernamePassword(credentialsId: 'git-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
+                        sh "git -c http.sslVerify=false push https://${GIT_USERNAME}:${GIT_PASSWORD}@${gitRepo} HEAD:<INSERT_BRANCH_TO_PUSH_TO>"
+                    }
+                }
+            }
+        }
+
+        stage('Continuous Integration - Merge to master') {
+            when {
+                branch "develop"
+            }
+            steps {
+                sh "git config --global user.email '<INSERT_GITLAB_USER_EMAIL>'"
+                sh "git config --global user.name '<INSERT_GITLAB_USER_NAME>'"
+                sh "git checkout -f origin/master"
+                sh "git merge --ff ${env.GIT_COMMIT}"
+                script {
+                    String pomVersion =  readMavenPom().getVersion()
+                    sh "git tag ${pomVersion}"
+                    String gitRepo = "${env.GIT_URL}".substring(8)
+                    withCredentials([usernamePassword(credentialsId: 'git-credentials', passwordVariable: 'GIT_PASSWORD', usernameVariable: 'GIT_USERNAME')]) {
+                        sh "git -c http.sslVerify=false push https://${GIT_USERNAME}:${GIT_PASSWORD}@${gitRepo} HEAD:<INSERT_BRANCH_TO_PUSH_TO> ${pomVersion}"
+                    }
+                }
+            }
+        }
+
+        stage('Continuous Delivery') {
+            when {
+                branch "master"
+            }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'nexus-credentials', passwordVariable: 'NEXUS_PASSWORD', usernameVariable: 'NEXUS_USERNAME')]) {
+                    sh "mvn <INSERT_MAVEN_DEPLOY_STAGE> -Dnexus.address=http://${NEXUS_USERNAME}:${NEXUS_PASSWORD}@${env.NEXUS_ADDRESS} -DaltDeploymentRepository=releaseRepository::default::http://${NEXUS_USERNAME}:${NEXUS_PASSWORD}@${env.NEXUS_ADDRESS}/repository/maven-releases -DskipTests"
+                }
+            }
+        }
+    }
+
+    post {
+        cleanup {
+            cleanWs()
+        }
+    }
+}
