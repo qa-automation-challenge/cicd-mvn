@@ -16,7 +16,7 @@ pipeline {
         SONAR_ADDRESS = 'http://host.docker.internal:9000'
         NEXUS_ADDRESS = 'host.docker.internal:8081'
         SONAR_PROPERTIES = 'jenkins/project.properties'
-        JENSKINS_SONAR_INSTALATION = 'Sonarqube'
+        JENKINS_SONAR_INSTALATION = 'Sonarqube'
     }
 
     stages {
@@ -27,7 +27,7 @@ pipeline {
                 sh "mvn clean test -Dtest='${UNIT_TESTS_PATH}'"
                 step([$class: 'JacocoPublisher', execPattern: 'target/jacoco.exec', exclusionPattern: '**/Main.class'])
 
-                withSonarQubeEnv("${JENSKINS_SONAR_INSTALATION}") {
+                withSonarQubeEnv("${JENKINS_SONAR_INSTALATION}") {
                     sh "<INSERT_SONARQUBE_SCANNER> -Dsonar.host.url=${SONAR_ADDRESS} -Dproject.settings=${SONAR_PROPERTIES}"
                 }
                 timeout(time: 1, unit: 'MINUTES') {
