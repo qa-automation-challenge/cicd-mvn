@@ -41,8 +41,8 @@ pipeline {
                 branch "CICD-*"
             }
             steps {
-                sh "git config --global user.email '<INSERT_GITLAB_USER_EMAIL>'"
-                sh "git config --global user.name '<INSERT_GITLAB_USER_NAME>'"
+                sh "git config --global user.email '<INSERT_GITHUB_USER_EMAIL>'"
+                sh "git config --global user.name '<INSERT_GITHUB_USER_NAME>'"
                 sh "git checkout -f origin/develop"
                 sh "git merge --ff ${env.GIT_COMMIT}"
                 script {
@@ -59,8 +59,8 @@ pipeline {
                 branch "develop"
             }
             steps {
-                sh "git config --global user.email '<INSERT_GITLAB_USER_EMAIL>'"
-                sh "git config --global user.name '<INSERT_GITLAB_USER_NAME>'"
+                sh "git config --global user.email '<INSERT_GITHUB_USER_EMAIL>'"
+                sh "git config --global user.name '<INSERT_GITHUB_USER_NAME>'"
                 sh "git checkout -f origin/master"
                 sh "git merge --ff ${env.GIT_COMMIT}"
                 script {
